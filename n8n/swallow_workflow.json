@@ -1,0 +1,406 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "31f03af6-2a3d-4953-a820-818c77d576cf",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "executeOnce": "={{ true }}",
+        "command": "=D:\\Python\\Python311\\python.exe D:\\swallow\\src\\score_month.py --month {{ $json.month }}"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        672,
+        0
+      ],
+      "id": "61c71a48-53fb-474c-9fd5-3143f807cd24",
+      "name": "Execute Command"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Replay cursor: advances one month per execution, 1997-02 .. 1998-12\nconst s = $getWorkflowStaticData('global');\nconst months = [];\nfor (let y = 1997; y <= 1998; y++) {\n  for (let m = 1; m <= 12; m++) {\n    const k = y + '-' + String(m).padStart(2, '0');\n    if (k >= '1997-02') months.push(k);\n  }\n}\nconst i = s.idx ?? 0;\nif (i >= months.length) return []; // replay finished, stop\ns.idx = i + 1;\nreturn [{ json: { month: months[i], step: i + 1, total: months.length } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "57112e57-48d6-48e7-9abd-a7d37167b943",
+      "name": "Next Month"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse JSON line printed by score_month.py on stdout\nconst raw = $input.first().json.stdout.trim().split('\\n').pop();\nconst r = JSON.parse(raw);\nreturn [{ json: r }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        896,
+        0
+      ],
+      "id": "85a700a3-ef80-443e-96eb-7ce571b5683e",
+      "name": "Parse Result"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "7091ef17-b82d-4d26-a41a-dc8272db8bc0",
+              "leftValue": "={{ $json.dq_ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1056,
+        0
+      ],
+      "id": "17256a7c-c01a-4e2a-86c1-9e98b62a34fe",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "errorMessage": "=DQ check failed for {{ $json.replay_month }}: {{ $json.dq_message }}"
+      },
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        1232,
+        128
+      ],
+      "id": "a9948b92-e978-4484-a16e-491ceaacde34",
+      "name": "Stop and Error"
+    },
+    {
+      "parameters": {
+        "command": "=D:\\Python\\Python311\\python.exe D:\\swallow\\src\\alert_report.py --month {{ $json.replay_month }}"
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1248,
+        -112
+      ],
+      "id": "8d78f007-80ed-4cd9-81bd-cbeca6e0ec56",
+      "name": "Alert Report"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse report JSON and reconcile with the scoring step\nconst raw = $input.first().json.stdout.trim().split('\\n').pop();\nconst r = JSON.parse(raw);\nconst scored = $('Parse Result').first().json;\nif (!r.found) throw new Error('mart.alerts has no rows for ' + r.replay_month);\nif (r.n_new + r.n_continuing !== r.n_alerts) throw new Error('new + continuing != n_alerts');\nif (r.n_alerts !== scored.n_alerts) throw new Error('alert_report n_alerts differs from score_month n_alerts');\nreturn [{ json: r }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1472,
+        -112
+      ],
+      "id": "faea5d75-fe9c-4f20-b93c-510a767b6acf",
+      "name": "Parse report"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "models/gemini-3-flash-preview"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=Bạn viết bản tin cảnh báo sớm nợ xấu hằng tháng cho một dự án portfolio dùng dữ liệu mô phỏng (replay Berka).\nChỉ dùng đúng các số có trong khối DỮ LIỆU bên dưới. Không tự tính thêm, không làm tròn lại, không thêm bất kỳ số nào khác (không đánh số thứ tự, không ghi phần trăm).\nViết tiếng Việt có dấu, tối đa 100 từ, gồm:\n- Một câu tóm tắt: tháng, số khoản được chấm điểm, số cảnh báo, số cảnh báo mới, số cảnh báo đang tiếp diễn.\n- Mỗi khoản trong new_alerts đúng một dòng theo mẫu: Khoản <loan_id>: điểm <score>; <top_drivers chép nguyên văn>. Không giải thích ý nghĩa tên các yếu tố, phần chú giải do hệ thống thêm sau.\n- Một câu cuối nhắc đây là dữ liệu mô phỏng (replay Berka), không phải hệ thống chạy thật.\nChỉ trả về nội dung bản tin, không thêm lời dẫn.\nDỮ LIỆU: {{ JSON.stringify($json) }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        1888,
+        -208
+      ],
+      "id": "f782bd77-26ab-40e1-9039-2f79cdf6932e",
+      "name": "Message a model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "LVLynSNUSBXziGmr",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Final memo. source: gemini (LLM text passed number check) | template (no new alerts, no LLM call\n// by design) | fallback (LLM text missing or failed the check). Lists and glossary are added by code.\nconst rep = $('Parse report').first().json;\nconst inp = $input.first().json;\nconst llmText = (inp.content?.parts ?? []).map(p => p.text).filter(Boolean).join('\\n').trim();\n\nconst template =\n  `Bản tin ${rep.replay_month} (dữ liệu mô phỏng, replay Berka): chấm ${rep.n_scored} khoản, ` +\n  `${rep.n_alerts} cảnh báo (${rep.n_new} mới, ${rep.n_continuing} đang tiếp diễn).` +\n  (rep.n_new === 0 ? '\\nTháng này không có cảnh báo mới.' : '') +\n  rep.new_alerts.map(a => `\\n- Khoản mới ${a.loan_id}: điểm ${a.score}; ${a.top_drivers}`).join('') +\n  `\\nĐây là dữ liệu mô phỏng, không phải hệ thống chạy thật.`;\n\nlet source, memoText, verified = null;\nconst problems = [];\n\nif (rep.n_new === 0) {\n  source = 'template';            // nothing new to narrate, so the LLM is not called\n  memoText = template;\n} else {\n  const allowed = new Set();\n  const add = v => { if (v !== null && v !== undefined && !Number.isNaN(Number(v))) allowed.add(Number(v)); };\n  ['n_scored', 'n_alerts', 'n_new', 'n_continuing'].forEach(k => add(rep[k]));\n  rep.new_alerts.forEach(a => {\n    add(a.loan_id); add(a.score);\n    for (const m of (a.top_drivers || '').matchAll(/\\d+(?:\\.\\d+)?/g)) add(m[0]);\n  });\n  const body = llmText.split(rep.replay_month).join(' ');\n  const found = [...body.matchAll(/\\d+(?:\\.\\d+)?/g)].map(m => m[0]);\n  if (inp.error) problems.push('llm error: ' + JSON.stringify(inp.error).slice(0, 150));\n  if (!llmText) problems.push('empty memo');\n  if (llmText && !llmText.includes(rep.replay_month)) problems.push('month label missing');\n  found.forEach(t => { if (!allowed.has(Number(t))) problems.push('number not in report: ' + t); });\n  rep.new_alerts.forEach(a => {\n    if (!found.some(t => Number(t) === a.loan_id)) problems.push('loan_id missing: ' + a.loan_id);\n  });\n  verified = problems.length === 0;\n  source = verified ? 'gemini' : 'fallback';\n  memoText = verified ? llmText : template;\n}\n\n// Continuing alerts, listed by code (not by the LLM)\nconst cont = rep.continuing_alerts ?? [];\nlet contBlock = '';\nif (cont.length) {\n  contBlock = '\\n\\nCác khoản đang tiếp diễn (điểm cao nhất):' +\n    cont.map(a => `\\n- Khoản ${a.loan_id}: điểm ${a.score}; báo từ tháng ${a.first_alert_month}; ${a.top_drivers}`).join('');\n  const hidden = rep.n_continuing - cont.length;\n  if (hidden > 0) contBlock += `\\n(Còn ${hidden} khoản đang tiếp diễn khác, không liệt kê.)`;\n}\n\n// Fixed glossary from the SQL definitions (no digits)\nconst glossary = {\n  ever_neg: 'tài khoản từng có số dư âm tính đến thời điểm chấm điểm',\n  hist_bal_avg: 'số dư trung bình trên các giao dịch lịch sử (trung bình theo giao dịch, không theo thời gian)',\n  hist_neg_share: 'tỷ lệ giao dịch lịch sử có số dư âm (tính theo số giao dịch, không theo thời gian)',\n  hist_penalty_cnt: 'số giao dịch lãi phạt do số dư âm (mã SANKC. UROK) trong lịch sử',\n  lm_credit_ratio: 'tiền vào của tháng dương lịch gần nhất so với mức tiền vào trung bình hằng tháng trong lịch sử',\n  lm_debit_ratio: 'tiền ra của tháng dương lịch gần nhất so với mức tiền ra trung bình hằng tháng trong lịch sử',\n  loan_burden: 'khoản trả góp hằng tháng so với mức tiền vào trung bình hằng tháng trong lịch sử',\n  loan_amount: 'số tiền vay',\n  loan_duration: 'kỳ hạn vay (tính bằng tháng)',\n  loan_age_k: 'số tháng kể từ giải ngân (đặc trưng kỹ thuật theo thời gian, không phải nguyên nhân rủi ro)',\n};\nconst used = new Set();\n[...rep.new_alerts, ...cont].forEach(a => {\n  for (const m of (a.top_drivers || '').matchAll(/([a-z_]+)\\(/g)) used.add(m[1]);\n});\nconst lines = [...used].filter(n => glossary[n]).map(n => `- ${n}: ${glossary[n]}`);\nconst footer = lines.length\n  ? '\\n\\nChú giải:\\n' + lines.join('\\n') +\n    '\\nSố trong ngoặc là mức đóng góp đã chuẩn hóa vào điểm; đóng góp dương làm tăng điểm. ' +\n    'Đây là tương quan trong mô hình, không phải nguyên nhân.'\n  : '';\n\nreturn [{ json: {\n  replay_month: rep.replay_month,\n  memo: memoText + contBlock + footer,\n  source, verified, problems,\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2256,
+        -64
+      ],
+      "id": "cb038efa-8bef-4cfc-b958-c0d65cbb7cff",
+      "name": "Verify memo"
+    },
+    {
+      "parameters": {
+        "fromEmail": "you@example.com",
+        "toEmail": "you@example.com",
+        "subject": "=[Swallow] Cảnh báo sớm {{ $json.replay_month }} (dữ liệu mô phỏng)",
+        "emailFormat": "text",
+        "text": "={{ $json.memo }}\n\n(Nguồn bản tin: {{ $json.source }}. Mô hình chỉ là cảnh báo sớm trên dữ liệu replay Berka, không phải hệ thống chạy thật.)",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        2496,
+        -64
+      ],
+      "id": "7d2e2f37-1e18-4902-9ebd-80cc4f73df31",
+      "name": "Send an Email",
+      "webhookId": "9f2fcb38-6886-45ed-b980-78ea9100ec1e",
+      "credentials": {
+        "smtp": {
+          "id": "hIeqSbEz55YoSOpn",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 2
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        224,
+        192
+      ],
+      "id": "7449b2f1-feb1-4ea5-bddc-d8bcc3b112e5",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 4
+          },
+          "conditions": [
+            {
+              "id": "d7caba99-5422-4266-9260-b83ed5d1dcc7",
+              "leftValue": "={{ $json.n_new }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.4,
+      "position": [
+        1664,
+        -80
+      ],
+      "id": "e0b181c0-ed7b-4af4-ab84-e62cff5105f1",
+      "name": "Has new"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "Next Month",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Command": {
+      "main": [
+        [
+          {
+            "node": "Parse Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Next Month": {
+      "main": [
+        [
+          {
+            "node": "Execute Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Result": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Alert Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stop and Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert Report": {
+      "main": [
+        [
+          {
+            "node": "Parse report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse report": {
+      "main": [
+        [
+          {
+            "node": "Has new",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Verify memo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify memo": {
+      "main": [
+        [
+          {
+            "node": "Send an Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Next Month",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has new": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Verify memo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "4e87c11d-1512-446f-b670-20753e69742f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1b313dc980f592dc136aa09221d056bfbbacc1902b993dda2d1ac9b5be0fca8f"
+  },
+  "nodeGroups": [],
+  "id": "Q5BlybbkD0M3nfdC",
+  "tags": []
+}
