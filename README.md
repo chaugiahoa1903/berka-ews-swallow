@@ -61,7 +61,19 @@ File xuất workflow là `n8n/swallow_workflow.json` (địa chỉ email là pla
 ![Số khoản được chấm và số cảnh báo theo tháng](docs/img/fig_monthly.png)
 *Hình 2. Số khoản được chấm và số cảnh báo mỗi tháng trong replay. Tháng 1/1997 dừng vì không qua kiểm tra chất lượng dữ liệu, đúng như thiết kế.*
 
-<!-- TODO bằng chứng: ảnh canvas, email nguồn Gemini, email nguồn template, lần chạy dừng do chất lượng dữ liệu -->
+Bằng chứng chạy thật trên n8n (ảnh chụp từ máy của tôi, địa chỉ email đã được che):
+
+![Toàn bộ workflow n8n](docs/img/n8n_canvas.png)
+*Hình 3. Toàn bộ workflow trên canvas n8n, từ Schedule Trigger đến Send an Email.*
+
+![Bản tin tháng 1998-08, nguồn Gemini](docs/img/n8n_email_gemini.png)
+*Hình 4. Bản tin tháng 1998-08 (chạy tay) do Gemini viết và đã qua Verify memo. Danh sách cảnh báo tiếp diễn và phần chú giải do code thêm sau khi kiểm tra.*
+
+![Bản tin tháng 1998-06, nguồn template](docs/img/n8n_email_template.png)
+*Hình 5. Bản tin tháng 1998-06: 7 cảnh báo, không có cái nào mới, nên bản tin do code dựng (nguồn template) và không gọi Gemini.*
+
+![Lần chạy dừng ở bước kiểm tra chất lượng dữ liệu](docs/img/n8n_dq_stop.png)
+*Hình 6. Lần chạy tay với tháng 1/1997 (tôi đặt tạm tháng này để kiểm thử nhánh lỗi, vì lịch replay bắt đầu từ 1997-02): workflow dừng ở Stop and Error vì không qua kiểm tra chất lượng dữ liệu, đúng như thiết kế.*
 
 ## Những điều tôi không khẳng định
 
@@ -83,4 +95,4 @@ Các script SQL trong `sql/` chạy theo thứ tự số bằng `python src\run_
 
 ## Trạng thái
 
-Model card, bảng KPI theo tháng (`mart.alert_kpi_monthly`) và từ điển chỉ số vẫn chưa viết.
+Model card: xem `MODEL_CARD.md` (bản nháp). Bảng KPI theo tháng (`mart.alert_kpi_monthly`) và từ điển chỉ số vẫn chưa viết.
