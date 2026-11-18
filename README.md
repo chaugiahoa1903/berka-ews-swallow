@@ -91,7 +91,16 @@ Khung bài toán lấy cảm hứng từ các diễn biến trong nước và qu
 
 ## Chạy lại
 
-Các script SQL trong `sql/` chạy theo thứ tự số bằng `python src\run_sql.py sql\<file>.sql`; các script Python nằm trong `src/`. <!-- TODO: bổ sung các bước cài đặt chính xác và file môi trường -->
+> Trình tự dưới đây được suy ra từ cấu trúc repo và phần hướng dẫn ở đầu mỗi script. **Tôi chưa chạy lại toàn bộ từ một máy trống**, nên coi đây là hướng dẫn có khả năng cần chỉnh khi gặp lỗi.
+
+**Cần có:** Windows, SQL Server chạy cục bộ (đăng nhập Windows; nếu dùng instance tên riêng, đặt `$env:SWALLOW_SQL_SERVER=".\SQLEXPRESS"`), ODBC Driver 18 for SQL Server, Python 3.11 (tôi dùng 3.11.8), kết nối mạng để kéo dữ liệu từ CTU. Cài thư viện bằng `pip install -r requirements.txt`. Database `Swallow` và các schema `stg`, `clean`, `mart` được script tự tạo.
+
+1. **Dữ liệu:** `python src\pull_berka.py` (kéo 8 bảng từ tài khoản công khai chỉ đọc của CTU), `python src\load_staging.py` (nạp vào `stg` và so khớp số dòng), `python src\data_quality.py` (ghi `reports/data_quality.md`).
+2. **Làm sạch và đặc trưng:** chạy lần lượt theo số thứ tự bằng `python src\run_sql.py sql\<tên file>.sql`, từ `01_clean.sql` đến `13_features.sql` (các file 02 đến 07 và 09 đến 12 chủ yếu là kiểm chứng dữ liệu, nhãn và mốc; `08` tạo mốc vỡ nợ và lưới as-of; `13` tạo đặc trưng), rồi `17_demographics.sql`. Các file `14`, `15`, `16`, `18` là chứng minh và chẩn đoán (leakage, số dư âm, nhân khẩu học), chạy tùy chọn.
+3. **Bộ dữ liệu mô hình:** `python src\export_dataset.py` (ra `data/processed`), `python src\check_dataset.py`.
+4. **Mô hình và đánh giá:** `python src\baseline_rule.py`, `python src\model_lr.py` (bộ core), `python src\model_lr.py demo` (thêm giới tính và tuổi); các phân tích khám phá `compare_models.py`, `silent_group_check.py`, `sensitivity.py`; cuối cùng `python src\train_final.py` ra `models/lr_core_train1993_96.joblib`. Các script in kết quả ra màn hình; các file trong `reports/*.txt` là bản lưu đầu ra.
+5. **Replay và giám sát:** `.\scripts\replay_all.ps1` chấm 24 tháng và ghi `reports/replay_log_rerun.jsonl` (tháng 1997-01 dừng ở kiểm tra chất lượng dữ liệu, đúng thiết kế); sau đó `sql\19_replay_check.sql`, `sql\20_new_alert_months.sql`, `sql\21_alert_kpi_monthly.sql`; xem báo cáo một tháng bằng `python src\alert_report.py --month 1998-08`; vẽ hình bằng `python src\make_figures.py` (đọc `reports/replay_log.jsonl`). Log replay gốc trong repo được ghi bằng PowerShell nên mã hóa UTF-16; script vẽ hình tự nhận diện.
+6. **n8n (tùy chọn):** `scripts\start_n8n.ps1` (cần Node 24 qua `fnm`, n8n 2.48.4), nhập `n8n/swallow_workflow.json`, rồi tự cấu hình Credentials (SMTP Gmail với App Password, khóa Gemini) trong n8n và sửa đường dẫn Python tuyệt đối trong node Execute Command cho đúng máy của bạn. File workflow không chứa khóa hay mật khẩu.
 
 ## Trạng thái
 
